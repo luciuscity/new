@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>동물 친구들 · 메모리 게임</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root { color-scheme: dark; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    body { margin: 0; min-height: 100svh; display: grid; place-items: center; padding: 28px 18px; background: #0f172a; color: #f1f5f9; }
+    main { width: min(100%, 520px); }
+    .eyebrow { color: #5eead4; font-size: 11px; font-weight: 800; letter-spacing: 3px; }
+    h1 { margin: 12px 0 8px; font-size: clamp(27px, 6vw, 36px); letter-spacing: -1.5px; }
+    .intro { margin: 0 0 28px; color: #94a3b8; font-size: 14px; line-height: 1.7; }
+    .toolbar { display: flex; align-items: center; gap: 10px; padding: 14px; border: 1px solid #334155; border-radius: 16px; background: #182338; }
+    .stat { flex: 1; white-space: nowrap; font-size: 13px; color: #cbd5e1; }
+    .stat strong { color: #f8fafc; font-size: 18px; }
+    button { font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    button:focus-visible { outline: 3px solid #fbbf24; outline-offset: 4px; }
+    .primary { border: 0; border-radius: 10px; background: #5eead4; color: #0f172a; padding: 12px 15px; font-size: 13px; font-weight: 800; transition: background .2s; }
+    .primary:hover { background: #99f6e4; }
+    .primary:disabled { cursor: default; background: #334155; color: #94a3b8; }
+    .time-track { height: 3px; margin: 16px 3px 20px; overflow: hidden; border-radius: 5px; background: #263449; }
+    .time-fill { height: 100%; width: 100%; background: #5eead4; transition: width .15s linear; }
+    .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .card { aspect-ratio: 1; padding: 0; border: 0; border-radius: 15px; background: transparent; perspective: 700px; }
+    .card-inner { display: block; position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform .35s ease; }
+    .card.open .card-inner { transform: rotateY(180deg); }
+    .face { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 15px; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+    .back { border: 1px solid #3b4b63; background: linear-gradient(145deg, #2b3b52, #1e293b); color: #71839c; font-size: 30px; font-weight: 300; }
+    .card:not(:disabled):hover .back { border-color: #5eead4; background: #30445a; }
+    .front { transform: rotateY(180deg); background: #e2e8f0; border: 2px solid #f8fafc; font-size: clamp(29px, 8vw, 49px); }
+    .card.matched .front { background: #b5f3df; border-color: #5eead4; }
+    .card:disabled { cursor: default; }
+    .foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 22px; color: #94a3b8; font-size: 12px; line-height: 1.6; }
+    #pairs { color: #5eead4; white-space: nowrap; }
+    dialog { width: min(380px, calc(100% - 36px)); padding: 36px 26px; border: 1px solid #475569; border-radius: 24px; background: #1e293b; color: #f8fafc; text-align: center; box-shadow: 0 24px 90px #0008; }
+    dialog::backdrop { background: #020617bb; backdrop-filter: blur(7px); }
+    .result-icon { font-size: 48px; }
+    dialog h2 { font-size: 26px; margin: 18px 0 8px; }
+    dialog p { color: #94a3b8; font-size: 14px; }
+    .final-score { margin: 26px 0; font-size: 16px; color: #cbd5e1; }
+    .final-score strong { display: block; margin-top: 5px; font-size: 48px; color: #5eead4; }
+    dialog .primary { width: 100%; padding: 15px; }
+    @media (max-width: 400px) { .toolbar { padding: 12px 10px; gap: 7px; } .stat { font-size: 11px; } .stat strong { font-size: 15px; } .primary { padding: 11px 10px; } .board { gap: 9px; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">LITTLE ANIMAL CLUB</div>
+      <h1>같은 친구를 찾아줘!</h1>
+      <p class="intro">30초 동안 기억력을 발휘해 동물 친구 8쌍을 만나보세요.</p>
+    </header>
+    <section class="toolbar" aria-label="게임 정보">
+      <div class="stat" aria-live="polite">현재 점수: <strong id="score">0</strong>점</div>
+      <div class="stat">남은 시간: <strong id="time">30</strong>초</div>
+      <button class="primary" id="start">시작하기</button>
+    </section>
+    <div class="time-track" aria-hidden="true"><div class="time-fill" id="time-fill"></div></div>
+    <section class="board" id="board" aria-label="4행 4열 동물 짝맞추기 카드"></section>
+    <div class="foot"><span id="status" role="status">시작하기를 누르면 게임이 시작돼요.</span><span id="pairs">0 / 8 쌍</span></div>
+  </main>
+  <dialog id="result" aria-labelledby="result-title" aria-describedby="result-description">
+    <div class="result-icon" id="result-icon" aria-hidden="true">🎉</div>
+    <h2 id="result-title">모든 친구를 찾았어요!</h2>
+    <p id="result-description">멋진 기억력이에요. 한 번 더 도전해 볼까요?</p>
+    <div class="final-score">최종 점수<strong id="final-score">80점</strong></div>
+    <button class="primary" id="restart">다시 시작</button>
+  </dialog>
+  <script>
+    'use strict';
+    const animals = ['🐶', '🐱', '🐼', '🦁', '🐯', '🐰', '🦊', '🐻'];
+    const names = ['강아지', '고양이', '판다', '사자', '호랑이', '토끼', '여우', '곰'];
+    const $ = (id) => document.getElementById(id);
+    let cards = [], selected = [], score = 0, matchedPairs = 0;
+    let running = false, locked = false, deadline = 0, timer = null, flipTimer = null;
+
+    function buildBoard() {
+      cards = [...animals, ...animals];
+      for (let i = cards.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [cards[i], cards[j]] = [cards[j], cards[i]];
+      }
+      $('board').replaceChildren();
+      cards.forEach((animal, index) => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'card';
+        card.disabled = !running;
+        card.setAttribute('aria-label', `${index + 1}번 카드, 뒷면`);
+        card.innerHTML = `<span class="card-inner" aria-hidden="true"><span class="face back">✦</span><span class="face front">${animal}</span></span>`;
+        card.addEventListener('click', () => flip(card, index));
+        $('board').append(card);
+      });
+    }
+
+    function updateTime() {
+      const remaining = Math.max(0, deadline - performance.now());
+      $('time').textContent = Math.ceil(remaining / 1000);
+      $('time-fill').style.width = `${remaining / 30000 * 100}%`;
+      $('time-fill').style.background = remaining <= 10000 ? '#fb7185' : '#5eead4';
+      if (remaining <= 0) endGame(false);
+    }
+
+    function startGame() {
+      clearInterval(timer);
+      clearTimeout(flipTimer);
+      if ($('result').open) $('result').close();
+      selected = []; score = 0; matchedPairs = 0; locked = false; running = true;
+      $('score').textContent = '0';
+      $('pairs').textContent = '0 / 8 쌍';
+      $('status').textContent = '카드 두 장을 뒤집어 같은 친구를 찾아주세요.';
+      $('start').disabled = true;
+      $('start').textContent = '진행 중';
+      buildBoard();
+      deadline = performance.now() + 30000;
+      updateTime();
+      timer = setInterval(updateTime, 100);
+      $('board').firstElementChild.focus();
+    }
+
+    function flip(card, index) {
+      if (!running) return;
+      if (performance.now() >= deadline) { updateTime(); return; }
+      if (locked || card.classList.contains('open')) return;
+      card.classList.add('open');
+      card.setAttribute('aria-label', `${index + 1}번 카드, ${names[animals.indexOf(cards[index])]}`);
+      selected.push({ card, index });
+      if (selected.length < 2) return;
+      const [first, second] = selected;
+      if (cards[first.index] === cards[second.index]) {
+        selected.forEach(({ card }) => { card.classList.add('matched'); card.disabled = true; });
+        score += 10; matchedPairs++;
+        $('score').textContent = score;
+        $('pairs').textContent = `${matchedPairs} / 8 쌍`;
+        $('status').textContent = '짝을 찾았어요! +10점';
+        selected = [];
+        if (matchedPairs === 8) endGame(true);
+      } else {
+        locked = true;
+        $('status').textContent = '다른 친구네요. 위치를 기억해 두세요!';
+        flipTimer = setTimeout(() => {
+          selected.forEach(({ card, index }) => {
+            card.classList.remove('open');
+            card.setAttribute('aria-label', `${index + 1}번 카드, 뒷면`);
+          });
+          selected = []; locked = false;
+          $('status').textContent = '카드 두 장을 뒤집어 같은 친구를 찾아주세요.';
+        }, 800);
+      }
+    }
+
+    function endGame(won) {
+      if (!running) return;
+      running = false;
+      clearInterval(timer);
+      clearTimeout(flipTimer);
+      document.querySelectorAll('.card').forEach((card) => card.disabled = true);
+      $('start').disabled = false;
+      $('start').textContent = '시작하기';
+      $('result-icon').textContent = won ? '🎉' : '⏰';
+      $('result-title').textContent = won ? '모든 친구를 찾았어요!' : '시간이 다 되었어요!';
+      $('result-description').textContent = won ? '멋진 기억력이에요. 한 번 더 도전해 볼까요?' : `동물 친구 ${matchedPairs}쌍을 찾았어요. 다시 도전해 보세요!`;
+      $('final-score').textContent = `${score}점`;
+      $('status').textContent = `게임 종료! 최종 점수는 ${score}점이에요.`;
+      $('result').showModal();
+      $('restart').focus();
+    }
+
+    $('start').addEventListener('click', startGame);
+    $('restart').addEventListener('click', startGame);
+    document.addEventListener('visibilitychange', () => { if (running) updateTime(); });
+    buildBoard();
+  </script>
+</body>
+</html>
